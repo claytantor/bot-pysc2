@@ -74,13 +74,12 @@ def main(argv):
         for t in range(100):
             step_actions = [agent.step(obs)]                 
             obs, reward, done, _ = env.step(step_actions)
-            score += reward
+            # reward_val = torch.tensor([reward], device=device)
+            # score += reward_val[0].data.cpu().numpy()
+
+            agent.push(step_actions, obs.observation['feature_minimap'][0], reward, done)
+
             if done:
-                plt.figure()
-                plt.imshow(get_screen(env).cpu().squeeze(0).permute(1, 2, 0).numpy(),
-                        interpolation='none')
-                plt.title('Example extracted screen')
-                plt.show()
                 print("Episode finished after {} timepsteps. score: {}".format(t+1, score))
                 break
 

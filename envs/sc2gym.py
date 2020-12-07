@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 import logging
-import pygame
+# import pygame
 
 from gym import spaces
 from pysc2.agents import base_agent
@@ -27,7 +27,7 @@ class SC2GymEnv(gym.Env):
 
     super(SC2GymEnv, self).__init__()
 
-    pygame.init()
+    # pygame.init()
 
     # Define action and observation space
     # They must be gym.spaces objects
