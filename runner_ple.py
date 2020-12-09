@@ -55,7 +55,7 @@ def plot_scores(map_name=""):
     plt.xlabel('Episode')
     plt.ylabel('Score')
     plt.plot(moving_average(episode_scores, 2))
-    plt.plot(moving_average(episode_scores, 100))
+    plt.plot(moving_average(episode_scores, 20))
 
     plt.pause(0.001)  # pause a bit so that plots are updated
     if is_ipython:
