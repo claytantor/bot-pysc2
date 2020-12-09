@@ -15,6 +15,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
+
+
 BATCH_SIZE = 128
 GAMMA = 0.999
 EPS_START = 0.9
@@ -24,34 +26,6 @@ TARGET_UPDATE = 10
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-# episode_durations = []
-
-# def moving_average(x, w):
-#     return np.convolve(x, np.ones(w), 'valid') / w
-
-# def plot_durations():
-#     plt.figure(2)
-#     plt.clf()
-#     durations_t = torch.tensor(episode_durations, dtype=torch.float)
-#     plt.title('Training...')
-#     plt.xlabel('Episode')
-#     plt.ylabel('Duration')
-#     plt.plot(durations_t.numpy())
-#     plt.plot(moving_average(episode_durations,6))
-#     # Take 100 episode averages and plot them too
-#     if len(durations_t) >= 100:
-#         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-#         means = torch.cat((torch.zeros(99), means))
-#         plt.plot(means.numpy())
-
-#     plt.pause(0.001)  # pause a bit so that plots are updated
-#     if is_ipython:
-#         display.clear_output(wait=True)
-#         display.display(plt.gcf())
-
-
 
 
 Transition = namedtuple('Transition',
@@ -107,10 +81,6 @@ class DQN(nn.Module):
         return self.head(x.view(x.size(0), -1))
 
 
-# resize = T.Compose([T.ToPILImage(),
-#                     T.Resize(40, interpolation=Image.CUBIC),
-#                     T.ToTensor()])
-
 class DRLAgent():
     """
             This is our naive agent. It picks actions at random!
@@ -134,13 +104,15 @@ class DRLAgent():
         self.target_net.eval()
 
         self.optimizer = optim.RMSprop(self.policy_net.parameters())
-        self.memory = ReplayMemory(10000)
+        self.memory = ReplayMemory(20000)
 
         self.steps_done = 0
 
 
     def push(self, state, action, next_state, reward):
         self.memory.push(state, action, next_state, reward)
+        # # Perform one step of the optimization (on the target network)
+        self.optimize_model()
 
 
     def pickAction(self, state):
@@ -153,9 +125,15 @@ class DRLAgent():
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return self.policy_net(state).max(1)[1].view(1, 1)
+                action = self.policy_net(state).max(1)[1].view(1, 1)
+                action_index = list(action[0])[0]
+                return action, self.actions[action_index]
+              
         else:
-            return torch.tensor([[random.randrange(self.n_actions)]], device=device, dtype=torch.long)
+            action = torch.tensor([[random.randrange(self.n_actions)]], device=device, dtype=torch.long)
+            action_index = list(action[0])[0]
+            return action, self.actions[action_index]
+
 
 
     def optimize_model(self):

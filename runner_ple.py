@@ -1,6 +1,9 @@
+import os, sys
 import numpy as np
 import time
 import torch
+import matplotlib
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -15,10 +18,48 @@ from agents.m2b.drl import DRLAgent
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(torch.cuda.get_device_name(torch.cuda.current_device()))
+
 
 resize = T.Compose([T.ToPILImage(),
                     T.Resize(40, interpolation=Image.CUBIC),
                     T.ToTensor()])
+
+
+# set up matplotlib
+is_ipython = 'inline' in matplotlib.get_backend()
+if is_ipython:
+    from IPython import display
+
+
+
+episode_scores = []
+
+def show_screen(screen, name):
+    plt.figure(2)
+    plt.imshow(screen.cpu().squeeze(0).permute(1, 2, 0).numpy(),
+            interpolation='none')
+    plt.title(name)
+    plt.show()
+
+def moving_average(x, w):
+    return np.convolve(x, np.ones(w), 'valid') / w
+
+
+def plot_scores(map_name=""):
+    plt.figure(1)
+    plt.clf()
+    # scores_t = torch.tensor(episode_scores, dtype=torch.float)
+    plt.title('Training {}...'.format(map_name))
+    plt.xlabel('Episode')
+    plt.ylabel('Score')
+    plt.plot(moving_average(episode_scores, 2))
+    plt.plot(moving_average(episode_scores, 100))
+
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    if is_ipython:
+        display.clear_output(wait=True)
+        display.display(plt.gcf())                       
 
 def get_screen(plenv, device):
 
@@ -44,66 +85,67 @@ class NaiveAgent():
         return self.actions[np.random.randint(0, len(self.actions))]
 
 
-game = MoveToBeacon()
+def main(argv): 
+    plt.ion()
 
-plenv = PLE(game, fps=30, display_screen=True)
-init_screen = get_screen(plenv, device)
-agent = DRLAgent(actions=plenv.getActionSet(), init_screen=init_screen)
-plenv.init()
+    game = MoveToBeacon()
 
-# lets do a random number of NOOP's
-for i in range(np.random.randint(0, 4)):
-    reward = plenv.act(plenv.NOOP)
-
-reward = 0.0
-
-# number of elpisodes
-for i in range(1000):  
-    while not plenv.game_over():
-
-        last_screen = get_screen(plenv,device)
-        current_screen = get_screen(plenv,device)
-        state = current_screen - last_screen
-
-        # observation = plenv.getScreenRGB()
-        action = agent.pickAction(state)
-        
-
-        # use the tensor number to 
-        ## index to the action
-        action_index = list(action.data.cpu().numpy()[0])[0]
-        action_num = plenv.getActionSet()[action_index]
-        # print(action_num)
-
-        reward = plenv.act(action_num)
-        if(reward>0.0):
-            print("GOAL...")
-
-        # Observe new state
-        last_screen = current_screen
-        current_screen = get_screen(plenv,device)
-        if not game.game_over():
-            next_state = current_screen - last_screen
-        else:
-            next_state = None
-
-        # Store the transition in memory
-        t_reward = torch.tensor([reward], device=device)
-        agent.push(state, action, next_state, t_reward)
-
-        # Move to the next state
-        state = next_state
-
-        # # Perform one step of the optimization (on the target network)
-        agent.optimize_model()
-
-        # ===
-
-
-    print("episode:{} score:{}".format( i, game.getScore() ))
-    plenv.reset_game()
+    plenv = PLE(game, fps=30, display_screen=True)
+    init_screen = get_screen(plenv, device)
+    agent = DRLAgent(actions=plenv.getActionSet(), init_screen=init_screen)
     plenv.init()
-    plenv.act(plenv.NOOP)
-    
-    time.sleep(1)
 
+    
+    # lets do a random number of NOOP's
+    for i in range(np.random.randint(0, 4)):
+        reward = plenv.act(plenv.NOOP)
+
+    reward = 0.0
+
+    # number of elpisodes
+    for i in range(1000):  
+        while not plenv.game_over():
+
+            last_screen = get_screen(plenv, device)
+            current_screen = get_screen(plenv, device)           
+            state = current_screen - last_screen
+
+            # returns the approiate action tensor and id
+            t_action, action_num = agent.pickAction(state)
+        
+            reward = plenv.act(action_num)
+            if(reward>0.0):
+                print("GOAL...")
+
+            # Observe new state
+            last_screen = current_screen
+            current_screen = get_screen(plenv, device)
+            if not game.game_over():
+                next_state = current_screen - last_screen
+            else:
+                # show_screen(next_state, "state diff")
+                next_state = None
+
+            # Store the transition in memory, needs to store the tensor action
+            t_reward = torch.tensor([reward], device=device)
+            agent.push(state, t_action, next_state, t_reward)
+
+            # Move to the next state
+            state = next_state
+
+            # # Perform one step of the optimization (on the target network)
+            # agent.optimize_model()
+
+            # ===
+
+
+        print("episode:{} score:{}".format( i, game.getScore() ))       
+        episode_scores.append(float(game.getScore()))
+        plot_scores("MoveToBeacon")
+        game.init()
+        time.sleep(1)
+
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
