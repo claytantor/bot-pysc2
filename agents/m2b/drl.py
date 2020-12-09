@@ -104,7 +104,7 @@ class DRLAgent():
         self.target_net.eval()
 
         self.optimizer = optim.RMSprop(self.policy_net.parameters())
-        self.memory = ReplayMemory(20000)
+        self.memory = ReplayMemory(10000)
 
         self.steps_done = 0
 
@@ -113,6 +113,12 @@ class DRLAgent():
         self.memory.push(state, action, next_state, reward)
         # # Perform one step of the optimization (on the target network)
         self.optimize_model()
+
+
+    def update_network(self, i_episode):
+        # Update the target network, copying all weights and biases in DQN
+        if i_episode % TARGET_UPDATE == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
 
 
     def pickAction(self, state):
@@ -137,8 +143,10 @@ class DRLAgent():
 
 
     def optimize_model(self):
+
         if len(self.memory) < BATCH_SIZE:
             return
+
         transitions = self.memory.sample(BATCH_SIZE)
         # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
         # detailed explanation). This converts batch-array of Transitions

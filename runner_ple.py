@@ -18,7 +18,8 @@ from agents.m2b.drl import DRLAgent
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(torch.cuda.get_device_name(torch.cuda.current_device()))
+if torch.cuda.is_available():
+    print(torch.cuda.get_device_name(torch.cuda.current_device()))
 
 
 resize = T.Compose([T.ToPILImage(),
@@ -103,7 +104,7 @@ def main(argv):
     reward = 0.0
 
     # number of elpisodes
-    for i in range(1000):  
+    for i_episode in range(1000):  
         while not plenv.game_over():
 
             last_screen = get_screen(plenv, device)
@@ -134,12 +135,10 @@ def main(argv):
             state = next_state
 
             # # Perform one step of the optimization (on the target network)
-            # agent.optimize_model()
-
-            # ===
+            agent.update_network(i_episode)
 
 
-        print("episode:{} score:{}".format( i, game.getScore() ))       
+        print("episode:{} score:{}".format( i_episode, game.getScore() ))       
         episode_scores.append(float(game.getScore()))
         plot_scores("MoveToBeacon")
         game.init()
