@@ -105,11 +105,11 @@ def main(argv):
 
     # number of elpisodes
     for i_episode in range(1000):  
+        game.init()
+        last_screen = get_screen(plenv, device)
+        current_screen = get_screen(plenv, device)           
+        state = current_screen - last_screen
         while not plenv.game_over():
-
-            last_screen = get_screen(plenv, device)
-            current_screen = get_screen(plenv, device)           
-            state = current_screen - last_screen
 
             # returns the approiate action tensor and id
             t_action, action_num = agent.pickAction(state)
@@ -141,9 +141,7 @@ def main(argv):
         print("episode:{} score:{}".format( i_episode, game.getScore() ))       
         episode_scores.append(float(game.getScore()))
         plot_scores("MoveToBeacon")
-        game.init()
-        time.sleep(1)
-
+        
 
 
 if __name__ == "__main__":
