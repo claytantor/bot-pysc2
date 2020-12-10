@@ -16,7 +16,6 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 
-
 BATCH_SIZE = 128
 GAMMA = 0.999
 EPS_START = 0.9
@@ -103,14 +102,21 @@ class DRLAgent():
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
-        self.optimizer = optim.RMSprop(self.policy_net.parameters())
+        # torch.optim.RMSprop(params, lr=0.01, alpha=0.99, eps=1e-08, weight_decay=0, momentum=0, centered=False)
+        self.optimizer = optim.RMSprop(self.policy_net.parameters(), lr=0.001, alpha=0.99, eps=EPS_START, weight_decay=EPS_DECAY, momentum=0.9, centered=False)
+
+        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001, momentum=0.9)
+
         self.memory = ReplayMemory(10000)
 
         self.steps_done = 0
 
 
     def push(self, state, action, next_state, reward):
+
+        # send step to memory
         self.memory.push(state, action, next_state, reward)
+
         # # Perform one step of the optimization (on the target network)
         self.optimize_model()
 

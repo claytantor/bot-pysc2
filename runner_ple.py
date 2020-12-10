@@ -11,6 +11,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
+
+
 from PIL import Image
 from ple import PLE
 from games.m2b import MoveToBeacon
@@ -68,11 +70,18 @@ def get_screen(plenv, device):
     obs = [x,y,3] RGB array
     """
     observation = plenv.getScreenRGB()
-    screen = observation.transpose((2, 0, 1))
+
+    # flip and rotate 90 deg
+    flipped = np.rot90(np.flip(observation, axis=1), 1)  
+
+    #Transpose it into torch order (CHW).
+    screen = flipped.transpose((2, 0, 1))
+
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
     screen = torch.from_numpy(screen)
 
     return resize(screen).unsqueeze(0).to(device)
+
 
 class NaiveAgent():
     """
@@ -112,30 +121,34 @@ def main(argv):
         while not plenv.game_over():
 
             # returns the approiate action tensor and id
-            t_action, action_num = agent.pickAction(state)
-        
+            t_action, action_num = agent.pickAction(state)       
             reward = plenv.act(action_num)
+
             if(reward>0.0):
                 print("GOAL...")
 
             # Observe new state
             last_screen = current_screen
             current_screen = get_screen(plenv, device)
+
             if not game.game_over():
                 next_state = current_screen - last_screen
             else:
-                # show_screen(next_state, "state diff")
                 next_state = None
 
-            # Store the transition in memory, needs to store the tensor action
+            # Store the transition in memory, needs to store the tensor action 
+            # and the  call an optimization
             t_reward = torch.tensor([reward], device=device)
             agent.push(state, t_action, next_state, t_reward)
 
             # Move to the next state
             state = next_state
 
-            # # Perform one step of the optimization (on the target network)
+            # Perform one step of the optimization (on the target network)
             agent.update_network(i_episode)
+
+            # if game.game_tick % np.random.randint(1,100) == 0 and state != None:
+            #     show_screen(state, "state render")
 
 
         print("episode:{} score:{}".format( i_episode, game.getScore() ))       
