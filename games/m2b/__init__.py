@@ -5,8 +5,9 @@ import ple
 import pygame
 from pygame.constants import K_UP, K_DOWN, K_RIGHT, K_LEFT
 
-MOVE_SIZE = 1
+MOVE_SIZE = 2
 BEACON_MOVE_SIZE = 1
+BEACON_UPDATE = 10
 
 class PersonPlayer(pygame.sprite.Sprite):
     def __init__(self,
@@ -61,13 +62,13 @@ class PersonPlayer(pygame.sprite.Sprite):
         if self.pos_x >= 0 and self.pos_x<self.SCREEN_WIDTH-self.width-1 and new_x == MOVE_SIZE:
             self.pos_x += new_x
 
-        if self.pos_x > 1 and self.pos_x<=self.SCREEN_WIDTH-self.width and new_x == -MOVE_SIZE:
+        if self.pos_x > MOVE_SIZE and self.pos_x<=self.SCREEN_WIDTH-self.width and new_x == -MOVE_SIZE:
             self.pos_x += new_x
          
-        if self.pos_y >= 0 and self.pos_y<self.SCREEN_HEIGHT-self.height-1 and new_y == MOVE_SIZE:
+        if self.pos_y >= 0 and self.pos_y<self.SCREEN_HEIGHT-self.height-MOVE_SIZE and new_y == MOVE_SIZE:
             self.pos_y += new_y
 
-        if self.pos_y > 1 and self.pos_y<=self.SCREEN_HEIGHT-self.height and new_y == -MOVE_SIZE:
+        if self.pos_y > MOVE_SIZE and self.pos_y<=self.SCREEN_HEIGHT-self.height and new_y == -MOVE_SIZE:
             self.pos_y += new_y
 
 
@@ -106,30 +107,36 @@ class Beacon(pygame.sprite.Sprite):
     def draw(self, screen):
         screen.blit(self.image, self.rect.center)
     
-    def update(self, dt):
-        self.game_tick += 1
+    def move(self, direction):
+        switcher = { 
+            0: [-BEACON_MOVE_SIZE, 0], 
+            1: [BEACON_MOVE_SIZE, 0], 
+            2: [0, BEACON_MOVE_SIZE], 
+            3: [0, -BEACON_MOVE_SIZE], 
+        } 
 
-        new_x = self.pos_x
-        new_y = self.pos_y
-
-        if self.game_tick % 10 == 0:
-            # print("trying to update")
-            new_x = np.random.randint(-BEACON_MOVE_SIZE, BEACON_MOVE_SIZE)
-            new_y = np.random.randint(-BEACON_MOVE_SIZE, BEACON_MOVE_SIZE)
+        new_x = switcher[direction][0]
+        new_y = switcher[direction][1]
 
         if self.pos_x >= 0 and self.pos_x<self.SCREEN_WIDTH-self.width-1 and new_x == BEACON_MOVE_SIZE:
             self.pos_x += new_x
 
-        if self.pos_x > 1 and self.pos_x<=self.SCREEN_WIDTH-self.width and new_x == -BEACON_MOVE_SIZE:
+        if self.pos_x > BEACON_MOVE_SIZE and self.pos_x<=self.SCREEN_WIDTH-self.width and new_x == -BEACON_MOVE_SIZE:
             self.pos_x += new_x
          
-        if self.pos_y >= 0 and self.pos_y<self.SCREEN_HEIGHT-self.height-1 and new_y == BEACON_MOVE_SIZE:
+        if self.pos_y >= 0 and self.pos_y<self.SCREEN_HEIGHT-self.height-BEACON_MOVE_SIZE and new_y == BEACON_MOVE_SIZE:
             self.pos_y += new_y
 
-        if self.pos_y > 1 and self.pos_y<=self.SCREEN_HEIGHT-self.height and new_y == -BEACON_MOVE_SIZE:
+        if self.pos_y > BEACON_MOVE_SIZE and self.pos_y<=self.SCREEN_HEIGHT-self.height and new_y == -BEACON_MOVE_SIZE:
             self.pos_y += new_y
 
+    def update(self, dt):
+        self.game_tick += 1
 
+        if self.game_tick % BEACON_UPDATE == 0:
+            self.move(np.random.randint(0,3))
+
+        
         self.rect.center = (self.pos_x, self.pos_y)
 
     def is_collided_with(self, sprite):

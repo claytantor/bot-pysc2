@@ -22,6 +22,7 @@ EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
+OPTIMIZER = 'Nesterov'
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,6 +88,9 @@ class DRLAgent():
 
     def __init__(self, actions, init_screen):
         self.actions = actions
+        self.learning_rate = 0.01
+        self.momentum = 0.9
+
 
         # Get number of actions from gym action space
         self.n_actions = len(self.actions)
@@ -103,9 +107,21 @@ class DRLAgent():
         self.target_net.eval()
 
         # torch.optim.RMSprop(params, lr=0.01, alpha=0.99, eps=1e-08, weight_decay=0, momentum=0, centered=False)
-        self.optimizer = optim.RMSprop(self.policy_net.parameters(), lr=0.001, alpha=0.99, eps=EPS_START, weight_decay=EPS_DECAY, momentum=0.9, centered=False)
+        #self.optimizer = optim.RMSprop(self.policy_net.parameters(), lr=0.001, alpha=0.99, #eps=EPS_START, weight_decay=EPS_DECAY, momentum=0.9, centered=False)
 
-        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001, momentum=0.9)
+        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
+        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
+
+
+         # optimizer
+        # self.momentum = momentum
+        if OPTIMIZER == 'Adam':
+            self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
+        elif OPTIMIZER == 'Nesterov':
+            self.optimizer = torch.optim.SGD(self.policy_net.parameters(), lr=self.learning_rate, momentum=self.momentum, nesterov=True)
+        else:
+            self.optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=self.learning_rate)
+
 
         self.memory = ReplayMemory(10000)
 
