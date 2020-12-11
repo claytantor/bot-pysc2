@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
-
+from torch.optim.lr_scheduler import StepLR
 
 BATCH_SIZE = 128
 GAMMA = 0.999
@@ -22,7 +22,7 @@ EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
-OPTIMIZER = 'Nesterov'
+OPTIMIZER = 'Adam'
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,6 +90,9 @@ class DRLAgent():
         self.actions = actions
         self.learning_rate = 0.01
         self.momentum = 0.9
+        self.gamma = GAMMA
+        self.lr_step=100
+        self.max_memory_size=50000
 
 
         # Get number of actions from gym action space
@@ -122,13 +125,16 @@ class DRLAgent():
         else:
             self.optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=self.learning_rate)
 
+        # try to oprimize learning rate
+        self.scheduler = StepLR(self.optimizer, step_size=self.lr_step, gamma=self.gamma)
 
-        self.memory = ReplayMemory(10000)
+        self.memory = ReplayMemory(self.max_memory_size)
 
         self.steps_done = 0
 
 
-    def push(self, state, action, next_state, reward):
+
+    def push(self, state, action, next_state, reward, i_episode):
 
         # send step to memory
         self.memory.push(state, action, next_state, reward)
@@ -136,11 +142,11 @@ class DRLAgent():
         # # Perform one step of the optimization (on the target network)
         self.optimize_model()
 
-
-    def update_network(self, i_episode):
-        # Update the target network, copying all weights and biases in DQN
+        # update_network
         if i_episode % TARGET_UPDATE == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
+        
+        # self.scheduler.step()
 
 
     def pickAction(self, state):
@@ -209,6 +215,12 @@ class DRLAgent():
         for param in self.policy_net.parameters():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
+        self.scheduler.step()
+
+
+
+
+
  
 
 

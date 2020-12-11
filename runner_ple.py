@@ -139,16 +139,15 @@ def main(argv):
             # Store the transition in memory, needs to store the tensor action 
             # and the  call an optimization
             t_reward = torch.tensor([reward], device=device)
-            agent.push(state, t_action, next_state, t_reward)
+            agent.push(state, t_action, next_state, t_reward, i_episode)
 
             # Move to the next state
             state = next_state
 
-            # Perform one step of the optimization (on the target network)
-            agent.update_network(i_episode)
-
             # if game.game_tick % np.random.randint(1,100) == 0 and state != None:
             #     show_screen(state, "state render")
+
+            time.sleep(0.01)
 
 
         print("episode:{} score:{}".format( i_episode, game.getScore() ))       
