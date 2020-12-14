@@ -1,13 +1,21 @@
 import os
 import sys
 import numpy as np
-import ple
 import pygame
-from pygame.constants import K_UP, K_DOWN, K_RIGHT, K_LEFT
 
-MOVE_SIZE = 2
-BEACON_MOVE_SIZE = 1
+from pygame.constants import K_UP, K_DOWN, K_RIGHT, K_LEFT
+from envs.ple.base import PyGameWrapper
+
+MOVE_SIZE = 8
+BEACON_MOVE_SIZE = 0
 BEACON_UPDATE = 10
+
+WHITE = (255, 255, 255)
+GREEN = (11, 252, 3)
+RED = (252, 3, 3)
+YELLOW = (248, 252, 3)
+
+# GAME_FONT = pygame.font.SysFont('droidsansmonoforpowerline', 10)
 
 class PersonPlayer(pygame.sprite.Sprite):
     def __init__(self,
@@ -16,6 +24,8 @@ class PersonPlayer(pygame.sprite.Sprite):
 
         self.SCREEN_WIDTH = SCREEN_WIDTH
         self.SCREEN_HEIGHT = SCREEN_HEIGHT
+        self.action_direction = ''
+        
 
         pygame.sprite.Sprite.__init__(self)
 
@@ -32,16 +42,27 @@ class PersonPlayer(pygame.sprite.Sprite):
         self.height = self.image.get_height()
         
         self.game_tick = 0
+        self.pos_color = WHITE
+        self.action_color = YELLOW
    
         # self.scale = scale
         self.init()
 
         
     def init(self):
-        self.pos_x = np.random.randint(0, int(self.SCREEN_WIDTH)-self.height)
-        self.pos_y = np.random.randint(0, int(self.SCREEN_HEIGHT)-self.width)
+        self.pos_x = np.random.randint(0, int(self.SCREEN_WIDTH)-self.width)
+        self.pos_y = np.random.randint(0, int(self.SCREEN_HEIGHT)-self.height)
         
     def draw(self, screen):
+        GAME_FONT = pygame.font.SysFont('droidsansmonoforpowerline', 10)
+
+        pos_txt_img = GAME_FONT.render('{},{}'.format(self.pos_x, self.pos_y), True, self.pos_color)
+        screen.blit(pos_txt_img, (3, 3))
+
+        action_txt_img = GAME_FONT.render('{}'.format(self.action_direction), True, self.action_color)
+        screen.blit(action_txt_img, (3, 13))
+
+
         screen.blit(self.image, self.rect.center)
     
     def update(self, dt):
@@ -49,27 +70,79 @@ class PersonPlayer(pygame.sprite.Sprite):
         self.rect.center = (self.pos_x, self.pos_y)
 
     def move(self, direction):
+
+        self.action_direction = direction
+
         switcher = { 
-            "up": [-MOVE_SIZE, 0], 
-            "down": [MOVE_SIZE, 0], 
-            "right": [0, MOVE_SIZE], 
-            "left": [0, -MOVE_SIZE], 
+            "up": [0, -MOVE_SIZE], 
+            "down": [0, MOVE_SIZE], 
+            "right": [MOVE_SIZE, 0], 
+            "left": [-MOVE_SIZE, 0]
         } 
 
         new_x = switcher[direction][0]
         new_y = switcher[direction][1]
 
-        if self.pos_x >= 0 and self.pos_x<self.SCREEN_WIDTH-self.width-1 and new_x == MOVE_SIZE:
-            self.pos_x += new_x
+        # if the xpos is greater than 0 and the xpos is less than the screen width minus 
+        # the width of the player sprite minus the move size then allow x move if 
+        # direction is right
+        rules_right = [self.pos_x >= 0, self.pos_x<=self.SCREEN_WIDTH-self.width-MOVE_SIZE, direction=='right']
 
-        if self.pos_x > MOVE_SIZE and self.pos_x<=self.SCREEN_WIDTH-self.width and new_x == -MOVE_SIZE:
+        # if the xpos is less than screen width and xpos minus move size >=0 and 
+        # direction is left
+        rules_left = [self.pos_x <= self.SCREEN_WIDTH, self.pos_x-MOVE_SIZE >= 0, direction=='left']  
+
+
+        # if the xpos is greater than 0 and the xpos is less than the screen width minus 
+        # the width of the player sprite minus the move size then allow x move if 
+        # direction is right
+        rules_down = [self.pos_y >= 0, self.pos_y<=self.SCREEN_HEIGHT-self.height-MOVE_SIZE, direction=='down']
+
+        # if the xpos is less than screen width and xpos minus move size >=0 and 
+        # direction is left
+        rules_up = [self.pos_y <= self.SCREEN_HEIGHT, self.pos_y-MOVE_SIZE >= 0, direction=='up']  
+
+        if all(rules_right):
             self.pos_x += new_x
+            self.action_color = YELLOW
+
+        elif all(rules_left):
+            self.pos_x += new_x
+            self.action_color = YELLOW      
+
+        elif all(rules_down):
+            self.pos_y += new_y
+            self.action_color = YELLOW      
+
+        elif all(rules_up):
+            self.pos_y += new_y
+            self.action_color = YELLOW    
+
+        else:
+            self.action_color = RED
+
+        # new_x = switcher[direction][0]
+        # new_y = switcher[direction][1]
+
+        # if self.pos_x >= 0 and self.pos_x<self.SCREEN_WIDTH-self.width-1 and new_x == MOVE_SIZE:
+        #     self.pos_x += new_x
+        #     self.action_color = YELLOW
+
+        # elif self.pos_x > MOVE_SIZE and self.pos_x<=self.SCREEN_WIDTH-self.width and new_x == -MOVE_SIZE:
+        #     self.pos_x += new_x
+        #     self.action_color = YELLOW
          
-        if self.pos_y >= 0 and self.pos_y<self.SCREEN_HEIGHT-self.height-MOVE_SIZE and new_y == MOVE_SIZE:
-            self.pos_y += new_y
+        # elif self.pos_y >= 0 and self.pos_y<self.SCREEN_HEIGHT-self.height-MOVE_SIZE and new_y == MOVE_SIZE:
+        #     self.pos_y += new_y
+        #     self.action_color = YELLOW
 
-        if self.pos_y > MOVE_SIZE and self.pos_y<=self.SCREEN_HEIGHT-self.height and new_y == -MOVE_SIZE:
-            self.pos_y += new_y
+        # elif self.pos_y > MOVE_SIZE and self.pos_y<=self.SCREEN_HEIGHT-self.height and new_y == -MOVE_SIZE:
+        #     self.pos_y += new_y
+        #     self.action_color = YELLOW
+
+        # else:
+        #     self.action_color = RED
+
 
 
 class Beacon(pygame.sprite.Sprite):
@@ -161,7 +234,7 @@ class Background():
         screen.blit(self.background_image, (0, 0))
 
 
-class MoveToBeacon(ple.games.base.PyGameWrapper):
+class MoveToBeacon(PyGameWrapper):
 
     def __init__(self, width=128, height=128):
 
@@ -172,14 +245,8 @@ class MoveToBeacon(ple.games.base.PyGameWrapper):
             "left": K_LEFT
         }
 
-        # fps = 30
-
-        ple.games.base.PyGameWrapper.__init__(self, width, height, actions=self.actions)
-
-        # self.scale = 30.0 / fps
-
-        # self.allowed_fps = 30  # restrict the fps  
-
+        PyGameWrapper.__init__(self, width, height, actions=self.actions)
+ 
         self.init_pos = (
             int(self.width * 0.2),
             int(self.height / 2)
@@ -196,7 +263,7 @@ class MoveToBeacon(ple.games.base.PyGameWrapper):
         self.beacon = None
 
         self.score = 0.0
-
+        self.event_key = ''
 
 
     def getActionSet(self):
@@ -204,16 +271,13 @@ class MoveToBeacon(ple.games.base.PyGameWrapper):
 
     def _load_images(self, asset_dir):
         images = {}
+
         # preload and convert all the images so its faster when we reset
-        # print(os.path.join(asset_dir, "person.png"))
         images["player"] = pygame.image.load(os.path.join(asset_dir, "person.png")).convert_alpha()
 
         images["goal"] = pygame.image.load(os.path.join(asset_dir, "goal.png")).convert_alpha()
 
         images["background"] = pygame.image.load(os.path.join(asset_dir, "background.png"))
-
-        # images["base"] = pygame.image.load(os.path.join(asset_dir, "background.png"))
-    
         
         return images
 
@@ -277,6 +341,7 @@ class MoveToBeacon(ple.games.base.PyGameWrapper):
 
             if event.type == pygame.KEYDOWN:
                 key = event.key
+                self.event_key = event.key
                 if key == self.actions['up']:
                     self.player.move('up')
                 if key == self.actions['down']:
@@ -316,3 +381,7 @@ class MoveToBeacon(ple.games.base.PyGameWrapper):
         self.backdrop.draw_background(self.screen)
         self.beacon.draw(self.screen)
         self.player.draw(self.screen)
+
+        # GAME_FONT = pygame.font.SysFont('droidsansmonoforpowerline', 10)
+        # event_txt_img = GAME_FONT.render('{}'.format(self.event_key), True, WHITE)
+        # self.screen.blit(event_txt_img, (3, 23))

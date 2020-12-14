@@ -190,6 +190,29 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
+"""
+If the observations are images we use CNNs.
+"""
+class QNetworkCNN(nn.Module):
+    def __init__(self, action_dim):
+        super(QNetworkCNN, self).__init__()
+
+        self.conv_1 = nn.Conv2d(3, 32, kernel_size=8, stride=4)
+        self.conv_2 = nn.Conv2d(32, 64, kernel_size=4, stride=3)
+        self.conv_3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.fc_1 = nn.Linear(8960, 512)
+        self.fc_2 = nn.Linear(512, action_dim)
+
+    def forward(self, inp):
+        inp = inp.view((1, 3, 210, 160))
+        x1 = F.relu(self.conv_1(inp))
+        x1 = F.relu(self.conv_2(x1))
+        x1 = F.relu(self.conv_3(x1))
+        x1 = torch.flatten(x1, 1)
+        x1 = F.leaky_relu(self.fc_1(x1))
+        x1 = self.fc_2(x1)
+
+        return x1
 
 class DQN(nn.Module):
 
@@ -245,15 +268,7 @@ class DRLAgent():
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
-        # torch.optim.RMSprop(params, lr=0.01, alpha=0.99, eps=1e-08, weight_decay=0, momentum=0, centered=False)
-        #self.optimizer = optim.RMSprop(self.policy_net.parameters(), lr=0.001, alpha=0.99, #eps=EPS_START, weight_decay=EPS_DECAY, momentum=0.9, centered=False)
-
-        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
-        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
-
-
-         # optimizer
-        # self.momentum = momentum
+        # optimizer
         if OPTIMIZER == 'Adam':
             self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
         elif OPTIMIZER == 'Nesterov':
@@ -261,13 +276,14 @@ class DRLAgent():
         else:
             self.optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=self.learning_rate)
 
-
         self.memory = ReplayMemory(10000)
 
         self.steps_done = 0
 
 
     def push(self, state, action, next_state, reward):
+
+        print("lr",)
 
         # send step to memory
         self.memory.push(state, action, next_state, reward)
@@ -351,331 +367,4 @@ class DRLAgent():
 
 
  
-
-
-
-class DRLCNNAgent():
-    '''
-    Environment details:
-         Observations:
-                There are 500 discrete states since there are 25 taxi positions, 5 possible locations of the passenger
-                (including the case when the passenger is the taxi), and 4 destination locations.
-         Actions:
-            There are 6 discrete deterministic actions:
-            - 0: move south
-            - 1: move north
-            - 2: move east
-            - 3: move west
-            - 4: pickup passenger
-            - 5: dropoff passenger
-        Rewards:
-            There is a reward of -1 for each action and an additional reward of +20 for delievering the passenger.
-            There is a reward of -10 for executing actions "pickup" and "dropoff" illegally.
-        Rendering:
-            - blue: passenger
-            - magenta: destination
-            - yellow: empty taxi
-            - green: full taxi
-            - other letters: locations
-    '''
-    def __init__(
-        self,
-        env,
-        name='',
-        n_hidden=150,
-        optimizer='RMSprop',
-        momentum=0.9,
-        loss='MSE',
-        exploration=None,
-        use_l1_regularizer=False,
-        l1_lambda=1.0,
-        replay_buffer_size=100000,
-        gamma=0.99,
-        learning_rate=0.0003,
-        steps_to_start_learn=50000,
-        target_update_freq=10000,
-        obs_represent='one-hot',
-        clip_grads=False,
-        use_batch_norm=False,
-        use_dropout=False,
-        dropout_rate=0.5
-        ):
-
-
-        assert type(env.observation_space) == gym.spaces.Discrete
-        assert type(env.action_space) == gym.spaces.Discrete
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-        # Hyper-params
-        self.name = name
-        self.gamma = gamma
-        self.n_hidden = n_hidden
-        self.n_actions = env.action_space.n
-        self.n_obs = env.observation_space.n
-        self.replay_buffer_size = replay_buffer_size
-        self.replay_buffer = ReplayBuffer(replay_buffer_size, 1)
-        self.steps_to_start_learn = steps_to_start_learn
-        self.target_update_freq = target_update_freq
-        self.clip_grads=clip_grads
-        self.use_batch_norm = use_batch_norm
-        self.use_dropout = use_dropout
-        self.dropout_rate = dropout_rate
-        self.use_l1_regularizer = use_l1_regularizer
-        self.l1_lambda = l1_lambda
-        self.obs_represent = obs_represent
-        if (self.obs_represent == 'one-hot'):
-            print("Using One-Hot-Vector representation for states")
-            self.one_hot_generator = OneHotGenerator(self.n_obs)
-        elif self.obs_represent == 'state-int':
-            self.n_obs = 1
-            print("Using State-Integer representation for states")
-        elif self.obs_represent == 'location-one-hot':
-            print("Using Location-One-Hots representation for states")
-            self.n_obs = 19 # 5 bits for row, col, passenger location and 4 for destIdx
-        else:
-            self.n_obs = len(list(env.env.decode(0))) # get state of the game as a tuple
-            print("Using Locations-Tuple representation for states")
-        if loss == 'SmoothL1':
-            self.loss_criterion = nn.SmoothL1Loss()
-        else:
-            self.loss_criterion = nn.MSELoss()
-        self.learning_rate = learning_rate
-        if exploration is None:
-            self.explore_schedule = ExponentialSchedule()
-        else:
-            self.explore_schedule = exploration
-
-        self.epsilon = self.explore_schedule.value(0)
-
-        # Initialize DQN's and optimizer
-        self.Q_train = DQN_DNN(
-            self.n_obs,
-            self.n_hidden,
-            self.n_actions,
-            self.use_batch_norm,
-            self.use_dropout,
-            self.dropout_rate).to(self.device)
-
-        self.Q_target = DQN_DNN(
-            self.n_obs,
-            self.n_hidden,
-            self.n_actions,
-            self.use_batch_norm,
-            self.use_dropout,
-            self.dropout_rate).to(self.device)
-
-        # set modes
-        self.Q_train.train()
-        self.Q_target.eval()
-
-        # optimizer
-        self.momentum = momentum
-        if optimizer == 'Adam':
-            self.optimizer = torch.optim.Adam(self.Q_train.parameters(), lr=self.learning_rate)
-        elif optimizer == 'Nesterov':
-            self.optimizer = torch.optim.SGD(self.Q_train.parameters(), lr=self.learning_rate, momentum=self.momentum, nesterov=True)
-        else:
-            self.optimizer = torch.optim.RMSprop(self.Q_train.parameters(), lr=self.learning_rate)
-
-        # statistics
-        self.steps_count = 0
-        self.episodes_seen = 0
-        self.num_param_updates = 0
-
-        # load checkpoint if it exists
-        self.load_agent_state()
-
-        # init target network with the same weights
-        self.Q_target.load_state_dict(self.Q_train.state_dict())
-
-        print("Created Agent for Taxi-v2")
-
-    def select_greedy_action(self, obs):
-        '''
-        This method picks an action to perform according to an epsilon-greedy policy.
-        Parameters:
-            obs: current state or observation from the environment (int or tuple)
-                for One-Hot the state is a number (out of 500)
-                else the state is a tuple (taxiRow, taxiCol, passLoc, destIdx)
-        Returns:
-            action (int)
-        '''
-        self.epsilon = self.explore_schedule.value(self.episodes_seen)
-        threshold = self.epsilon
-        rand_num = random.random()
-        if (rand_num > threshold):
-            # Pick according to current Q-values
-            if self.obs_represent == 'one-hot' or self.obs_represent == 'location-one-hot':
-                if type(obs) is int:
-                    obs = self.one_hot_generator.to_one_hot(obs)
-            elif self.obs_represent == 'state-int':
-                obs = obs / 499.0
-            else:
-                assert len(obs) == 4
-                obs = obs / 4.0 # normalize
-            # make sure the target network is in eval mode (no gradient calculation)
-            obs = torch.from_numpy(obs).unsqueeze(0).type(torch.FloatTensor).to(self.device)
-            self.Q_target.eval()
-            with torch.no_grad():
-                q_actions = self.Q_target(obs)
-                action = torch.argmax(q_actions).item()
-        else:
-            action = np.random.choice(self.n_actions)
-        return action
-
-    def learn(self, batch_size):
-        '''
-        This method performs a training step for the agent.
-        Parmeters:
-            batch_size: number of samples to perform the training step on (int)
-        '''
-        if (self.steps_count > self.steps_to_start_learn and
-            self.replay_buffer.can_sample(batch_size)):
-            # Use the replay buffer to sample a batch of transitions
-            # Note: done_mask[i] is 1 if the next state corresponds to the end of an episode,
-            # in which case there is no Q-value at the next state; at the end of an
-            # episode, only the current state reward contributes to the target
-            obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.replay_buffer.sample(batch_size)
-            obs_batch = torch.from_numpy(obs_batch).type(torch.FloatTensor).to(self.device)
-            act_batch = torch.from_numpy(act_batch).long().to(self.device)
-            rew_batch = torch.from_numpy(rew_batch).to(self.device)
-            next_obs_batch = torch.from_numpy(next_obs_batch).type(torch.FloatTensor).to(self.device)
-            if self.obs_represent == 'locations':
-                obs_batch = obs_batch / 4.0 # normalize
-                next_obs_batch = next_obs_batch / 4.0 # noramalize
-            elif self.obs_represent == 'state-int':
-                obs_batch = obs_batch / 499.0 # normalize
-                next_obs_batch = next_obs_batch / 499.0 # noramalize
-            not_done_mask = torch.from_numpy(1 - done_mask).to(self.device)
-            # Compute current Q value, q_func takes only state and output value for every state-action pair
-            # We choose Q based on action taken.
-            current_Q_values = self.Q_train(obs_batch.type(torch.FloatTensor).to(self.device)).gather(1, act_batch.unsqueeze(1))
-            # Compute next Q value based on which action gives max Q values
-            # Detach variable from the current graph since we don't want gradients for next Q to propagated
-            next_max_q = self.Q_target(next_obs_batch.type(torch.FloatTensor).to(self.device)).detach().max(1)[0]
-            next_Q_values = not_done_mask * next_max_q
-            # Compute the target of the current Q values
-            target_Q_values = rew_batch + (self.gamma * next_Q_values)
-            # loss
-            loss = self.loss_criterion(current_Q_values, target_Q_values.unsqueeze(1))
-            # add regularozation
-            if self.use_l1_regularizer:
-                lam = torch.tensor(self.l1_lambda)
-                l1_reg = torch.tensor(0.)
-                for param in self.Q_train.parameters():
-                    l1_reg += torch.norm(param, 1)
-                loss += lam * l1_reg
-            # optimize model
-            self.optimizer.zero_grad()
-            loss.backward()
-            if (self.clip_grads):
-                for param in self.Q_train.parameters():
-                    param.grad.data.clamp_(-1, 1)
-            self.optimizer.step()
-            self.num_param_updates += 1
-            # copy weights to target network and save network state
-            if self.num_param_updates % self.target_update_freq == 0:
-                self.Q_target.load_state_dict(self.Q_train.state_dict())
-                # save network state
-                self.save_agent_state()
-
-    def predict_action(self, obs):
-        '''
-        Predict action for inference or playing.
-        Parameters:
-            obs: a state observation from the environment (int/tuple/np.array)
-        Returns:
-            action: action for which the Q-value of the current observation is the highest (int)
-        '''
-        with torch.no_grad():
-            obs = torch.from_numpy(obs).unsqueeze(0).type(torch.FloatTensor).to(self.device)
-            q_actions = self.Q_target(obs)
-            action = torch.argmax(q_actions).item()
-        return action
-
-    def save_agent_state(self):
-        '''
-        This function saves the current state of the DQN (the weights) to a local file.
-        '''
-        filename = "taxi_agent_" + self.name + ".pth"
-        dir_name = './taxi_agent_ckpt'
-        full_path = os.path.join(dir_name, filename)
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-        torch.save({
-            'model_state_dict': self.Q_train.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'steps_count': self.steps_count,
-            'episodes_seen': self.episodes_seen,
-            'epsilon': self.epsilon,
-            'num_param_updates': self.num_param_updates
-            }, full_path)
-        print("Saved Taxi Agent checkpoint @ ", full_path)
-
-    def load_agent_state(self, path=None, copy_to_target_network=False, load_optimizer=True):
-        '''
-        This function loads an agent checkpoint.
-        Parameters:
-            path: path to a checkpoint, e.g `/path/to/dir/ckpt.pth` (str)
-            copy_to_target_network: whether or not to copy the loaded training
-                DQN parameters to the target DQN, for manual loading (bool)
-            load_optimizer: whether or not to restore the optimizer state
-        '''
-        if path is None:
-            filename = "taxi_agent_" + self.name + ".pth"
-            dir_name = './taxi_agent_ckpt'
-            full_path = os.path.join(dir_name, filename)
-        else:
-            full_path = path
-        exists = os.path.isfile(full_path)
-        if exists:
-            if not torch.cuda.is_available():
-                checkpoint = torch.load(full_path, map_location='cpu')
-            else:
-                checkpoint = torch.load(full_path)
-            self.Q_train.load_state_dict(checkpoint['model_state_dict'])
-            if load_optimizer:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.steps_count = checkpoint['steps_count']
-            self.episodes_seen = checkpoint['episodes_seen']
-            self.epsilon = checkpoint['epsilon']
-            self.num_param_update = checkpoint['num_param_updates']
-            print("Checkpoint loaded successfully from ", full_path)
-            # for manual loading a checkpoint
-            if copy_to_target_network:
-                self.Q_target.load_state_dict(self.Q_train.state_dict())
-        else:
-            print("No checkpoint found...")
-
-def preprocess_frame(env, mode='atari', render=False):
-    '''
-    This function preprocess the current frame of the environment.
-    Prameters:
-        env: the environment (gym.Env)
-        mode: processing mode to use (str)
-            options: 'atari' - 1 channel, 'control' - 3 channels
-        render: whetheState-Integerr or not to render the screen, which opens a window (bool)
-            * in ClassicControl problems, even when setting render mode to 'rgb_array',
-                a window is opened. Setting this to False will close this window each time.
-            * Performance is better when set to True, less overhead.
-    Returns:
-        frame: the processed (reshaped, scaled, adjusted) frame (np.array, np.uint8)
-    '''
-    screen = env.render(mode='rgb_array')
-    if not render:
-        env.close() # on Windows, must close the opened window
-    if mode =='atari':
-        screen = np.reshape(screen, [500, 500, 3]).astype(np.float32)
-        screen = screen[:, :, 0] * 0.299 + screen[:, :, 1] * 0.587 + screen[:, :, 2] * 0.114 # dimension reduction, contrast
-        screen = Image.fromarray(screen)
-        resized_screen = screen.resize((84, 84), Image.BILINEAR)
-        resized_screen = np.array(resized_screen)
-        x_t = np.reshape(resized_screen, [84, 84, 1])
-    else:
-        screen = np.reshape(screen, [500, 500, 3]).astype(np.uint8)
-        screen = Image.fromarray(screen)
-        resized_screen = screen.resize((84, 84), Image.BILINEAR)
-        resized_screen = np.array(resized_screen)
-        x_t = np.reshape(resized_screen, [84, 84, 3])
-    return x_t.astype(np.uint8)
 

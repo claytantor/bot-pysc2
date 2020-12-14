@@ -16,11 +16,11 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.optim.lr_scheduler import StepLR
 
-BATCH_SIZE = 128
-GAMMA = 0.999
+BATCH_SIZE = 256
+GAMMA = 0.9
 EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
+EPS_END = 0.25
+EPS_DECAY = 100
 TARGET_UPDATE = 10
 OPTIMIZER = 'Adam'
 
@@ -109,14 +109,7 @@ class DRLAgent():
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
-        # torch.optim.RMSprop(params, lr=0.01, alpha=0.99, eps=1e-08, weight_decay=0, momentum=0, centered=False)
-        #self.optimizer = optim.RMSprop(self.policy_net.parameters(), lr=0.001, alpha=0.99, #eps=EPS_START, weight_decay=EPS_DECAY, momentum=0.9, centered=False)
-
-        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
-        # self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
-
-
-         # optimizer
+        # optimizer
         # self.momentum = momentum
         if OPTIMIZER == 'Adam':
             self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
@@ -133,7 +126,6 @@ class DRLAgent():
         self.steps_done = 0
 
 
-
     def push(self, state, action, next_state, reward, i_episode):
 
         # send step to memory
@@ -146,16 +138,17 @@ class DRLAgent():
         if i_episode % TARGET_UPDATE == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
         
-        # self.scheduler.step()
 
-
-    def pickAction(self, state):
+    def select_action(self, state):
+        
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             math.exp(-1. * self.steps_done / EPS_DECAY)
         self.steps_done += 1
+
         if sample > eps_threshold:
             with torch.no_grad():
+                # print("softmax sample:{} eps_threshold:{}".format(sample, eps_threshold))
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
@@ -164,6 +157,7 @@ class DRLAgent():
                 return action, self.actions[action_index]
               
         else:
+            # print("random sample:{} eps_threshold:{}".format(sample, eps_threshold))
             action = torch.tensor([[random.randrange(self.n_actions)]], device=device, dtype=torch.long)
             action_index = list(action[0])[0]
             return action, self.actions[action_index]
@@ -216,6 +210,8 @@ class DRLAgent():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
         self.scheduler.step()
+
+        # print("lr", self.scheduler.get_lr()[0])
 
 
 

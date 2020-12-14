@@ -11,10 +11,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-
-
+from envs.ple import PLE
 from PIL import Image
-from ple import PLE
 from games.m2b import MoveToBeacon
 from agents.m2b.drl import DRLAgent
 
@@ -121,7 +119,7 @@ def main(argv):
         while not plenv.game_over():
 
             # returns the approiate action tensor and id
-            t_action, action_num = agent.pickAction(state)       
+            t_action, action_num = agent.select_action(state)       
             reward = plenv.act(action_num)
 
             if(reward>0.0):
